@@ -20,6 +20,10 @@ data Relation a b  = Relation { domain ::  M.Map a (S.Set b)
 -- The simplest possible type. Inefficient, but works for many purposes
 type Rel a b = [(a,b)]
 type Rel' a b =  (M.Map a (S.Set b)) -- even this is denormalizing. Can get empty sets in result. We really want M.Map a (NonEmptySet b)
+-- data Iso a b = {to :: a -> b, from :: a -> b}
+-- data IsoFin a b = {to :: M.Map a b, from :: M.Map b a}
+
+
 -- categorical instances. Require typeclass constraint, so not actual Category instances.
 compose :: Eq b => Rel a b -> Rel b c -> Rel a c
 compose xs ys = [ (a,c)  | (a, b) <- xs, (b', c) <- ys, b' == b]
@@ -125,6 +129,9 @@ div g j a = let cs = g a
                 intersect bs
 -}
 
+
+
+-- this one will be very annoying in the dict language
 untrans :: Rel a (b,c) -> Rel (a,b) c
 untrans = map assoc where assoc (x,(y,z)) = ((x,y),z)
 
