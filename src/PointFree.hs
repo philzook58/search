@@ -29,7 +29,7 @@ zero :: PF b (NatF a)
 zero = Comp Lft Dump
 
 type ListF b a = () :+: (b :*: a) 
-
+-- nilF, consF
 nil = Comp Lft Dump
 cons :: PF (b, a) (ListF b a)
 cons = Rgt
@@ -52,3 +52,17 @@ interp Fst = arr fst
 interp Snd = arr snd
 interp (Lit f) = arr f
 interp (Fan f g) = (interp f) &&& (interp g)
+
+
+{-
+
+rewrite search.
+How to express rewrite rules?
+pattern match gives you kind of a hoas for rewriting.
+
+Can pattern match in typeclass more thoroguhly.
+or type families
+
+
+
+-}

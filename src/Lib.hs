@@ -50,6 +50,39 @@ solutions = do
 
 {-
 
+https://stackoverflow.com/questions/3757855/how-can-iterative-deepening-search-implemented-efficient-in-haskell
+
+An iterable expansion.
+a -> [a]
+macthes rewrite rules
+
+
+beam search -- implciti configuration via reify?
+>>= bind instance should prune. Beam n f a. f is a parameter reflecting the optimization criteria? But we need a new one at each new type?
+-- could do it as newtype wrapper. Beam sorts a and takes n best ones
+(cost x, x)
+
+
+prune :: Ord b => (a -> b) -> Int -> [a] -> [a]
+prune f n = take n $ sortBy f $ nub
+
+
+
+
+iterative search
+a*
+
+dynamic programming ~ histomorphism?, futotmorphism? Difference of top down and bottom up?
+
+
+
+What is a search?
+
+-}
+
+
+{-
+
 
 class (Category k, Ord (k a b)) => Allegory k where
     intersect / lub 
@@ -312,7 +345,66 @@ type Nat = Fix NatF
 plus :: (Nat, Nat) -> Nat
 plus = (cata phi) . Proj1 where phi = Split (Const Proj2) (Fix . Succ) 
  
+-- paramorphism
+Para :: Fun (f (Fix f, a) -> a) -> Fun (Fix f -> a)
+plus :: (Nat, Nat) -> Nat
+plus = para phi where phi = Split 
 
+
+Dump :: Fun a ()
+Impossible :: Fun Void a
+
+
+
+-- add one or don't
+-- needs distribtute. undist is already definable. odd
+ (() + (), Nat) -> Nat
+~> (((), Nat) + ((), Nat) -> Nat
+ ~> Comp (Split Proj2 (Comp succ Proj2)) Dist
+
+Seems like distribute is a new primitive
+also 0 -> (0,a) is a related construct.
+
+
+chapter 3 of algebra of programming has a lot to say about this.
+Tensoiral strength is mentioned as an option. Aren;t all functors strong once you have map?
+
+(NatF NatF NatF (), Nat ) -> Nat, is the type of numbers <= 2 added to a nat.
+(Map (Map Strong)) (Map Strong) Strong... uhh, well, with choice at each stage whether to continue to strong or not.
+
+
+But map is much less powerful if you don't have currying.
+Strong :: (f a, b) -> f (a,b)    
+strong let's you carry context, storage
+ 
+
+I'm going to need to strong all the way down to the bottom of a nat.
+I think I might be able to derive Dist from Strong. (a, b + c) -> (a, (a, b + c)) -> (a, (a,b) + c) -> (a,b) + (a,c)
+If I'm able to Strong +
+Not sure it's clear whch strong I meant.
+I need BiStrong?
+
+Does seem similar to the appliucative style.
+MonoidalMap :: (f a, f b) -> f (a,b) 
+
+
+Map (a -> b) -> 
+BiMap (a -> b) (c -> d) (f a c -> f b d)
+
+BiMap may be useful.  Without currying and functions, there are no contravairant values.
+by avoding currying and expoential objects, we reduce the logic we are representing. First order?
+
+if all functors are implicilty poynomial, not clear that Map is necessary. A meta level map may be fine.?
+
+-- BiMap 
+
+
+NatF (Fix NatF, Nat) -> Nat
+
+
+-- is this possible or is this a fundmental combinator?
+distribute :: (a ,(b + c)) -> (a,b) + (a,c)
+distribute = split inl 
 
 -- with currying
 plus :: Nat -> Nat -> Nat
@@ -351,7 +443,8 @@ type N a = () :+: a
 ||| --- split / either
 +++ --- plus
 
-
+swap :: (a,b) -> (b,a)
+swap = (par snd fst) . dup
 
 vs 
 type N = forall a. () :+: a

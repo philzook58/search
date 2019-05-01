@@ -12,6 +12,22 @@ data Relation a b  = Relation { domain ::  M.Map a (S.Set b)
                                 , range  ::  M.Map b (S.Set a)
                                 } deriving (Show, Eq, Ord)
 
+
+Query optimization in database systems is related. A search strategy based on what is available. If stuff, isn't indexed, try to avoid building them
+unless it is useful.
+Different tables have different indices avaiable
+
+Hash join ~~ kind of what we're doing with maps
+http://hackage.haskell.org/package/unordered-containers-0.2.10.0/docs/Data-HashSet.html
+HashSet and hashMap are effectively drop ins that require hashable rather than Ord
+Sort merge join - I haven't implemented that. Could though. The AscList interface, which should probablyt be protected by a newtype
+https://www.twanvl.nl/blog/haskell/generic-merge
+interesting. merge as a kind of fold which selects which
+http://hackage.haskell.org/package/vector-algorithms-0.8.0.1
+
+
+Database system,s in general is highly related. We could probably directly intepret to SQL queries. (point free sql?)
+
 -}
 --compose :: Relation b c -> Relation a b -> Relation a c
 -- compose 
@@ -22,9 +38,10 @@ type Rel a b = [(a,b)]
 type Rel' a b =  (M.Map a (S.Set b)) -- even this is denormalizing. Can get empty sets in result. We really want M.Map a (NonEmptySet b)
 -- data Iso a b = {to :: a -> b, from :: a -> b}
 -- data IsoFin a b = {to :: M.Map a b, from :: M.Map b a}
-
+-- data FunRel {a -> [b],  b -> [a]}
 
 -- categorical instances. Require typeclass constraint, so not actual Category instances.
+-- nested loop join
 compose :: Eq b => Rel a b -> Rel b c -> Rel a c
 compose xs ys = [ (a,c)  | (a, b) <- xs, (b', c) <- ys, b' == b]
 
