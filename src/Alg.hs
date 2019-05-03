@@ -408,3 +408,47 @@ onelesstwo = _Left
 -- This corresponds with you can compose isomorphisms with either inequalities or divisiblity
 factorexample'' ::  (a * a + Two * a + I) .| (a + I)
 factorexample'' = (rev factorexample) . _1 
+
+-- maybe we want to newtype these.
+-- partially applied +
+type P n = (Either n) 
+-- partially applied *
+type M n = (,) n
+
+type LowerP f = f O
+-- you can lower back to the original form
+unP :: LowerP (P n) ~~ n
+unP = id_plus
+
+type LowerM f = f I
+-- you can lower back to the original form
+unM :: LowerM (M n) ~~ n
+unM = id_plus
+
+-- Now addition is defined as Functor.Compose
+-- add_good :: (Compose (P n) g) a ~~ (n + g) a
+-- add_good = id  -- needs newtype iso.
+
+
+
+-- negative numbers
+-- illegal polymorphic type. no impredicative polymorphism
+type T g a b = (a >= (g b))
+newtype GTE a b = GTE (a >= b)
+--newtype N g f = N { unN :: forall a b. (((g a) >= b ) ~~ (a >= f b))}
+-- this is accepted
+-- This is the proof term that f is the negative of g
+type N g f = forall a b. ((GTE (g a) b) ~~ (GTE a (f b)))
+
+-- ordinarily we think of negative numbers as being (n + (-n) == 0), but this makes no sense.
+-- The inequality version does (maybe). f will have to be a type family, not type.
+-- yeah, myabe this is bunkus. could make it polymorphic on only on a? And pick b such that 
+
+-- we can define an interesting version of the negative numbers
+-- it doesn't feel so intrinsic anymore though.
+-- also going higher order on the prisms is odd.
+
+
+
+-- similarly for multiplication
+-- using divisibility rather than GTE
