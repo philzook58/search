@@ -1,11 +1,13 @@
 {-# LANGUAGE TypeOperators, RankNTypes, TypeFamilies, NoStarIsType, TupleSections, 
 LambdaCase, EmptyCase, MultiParamTypeClasses, FunctionalDependencies, TypeApplications, 
-ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances,  UndecidableInstances,  DataKinds #-}
+ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances,  UndecidableInstances,  DataKinds, PolyKinds, AllowAmbiguousTypes #-}
 module Alg where
 
-import  Control.Lens
+import  Control.Lens hiding (rewrite)
 import Control.Arrow
 import Data.Void
+import Data.Type.Bool
+import qualified Data.Type.Equality as TEq
 
 type a * b = (a,b)
 type a + b = Either a b
@@ -39,16 +41,23 @@ Isomorphisms have an identity and compose. They form a category
 id :: Iso' a a
 (.) :: Iso' b c -> Iso' a b -> Iso' a c
 -}
+type a ~~ b = Iso' a b
+
+refl ::  a ~~ a
+refl = id
+
+compose :: (a ~~ b) -> (b ~~ c) -> (a ~~ c)
+compose = (.)
 
 -- isomorphisms can also be reversed. from is the name of this combinator from Control.Lens.Iso
-rev :: Iso' a b -> Iso' b a
+rev ::  a ~~ b -> b ~~ a
 rev = from
 
 -- a very simple proof. holds basically by definition
 oneonetwo :: Iso' (I + I) Two
 oneonetwo = id
 
-type a ~~ b = Iso' a b
+
 
 
 -- now we start to state our axioms
@@ -85,6 +94,8 @@ comm_mul :: Iso' (a * b) (b * a)
 comm_mul = swapped
 
 
+-- comm = swapped
+
 
 --type Test a b c = (a * b + a * c)
 -- The distributive property and the zero*x=zero property make the type algebra a semiring.
@@ -102,11 +113,8 @@ mul_zero = iso (\(_,y) -> absurd y) absurd
 
 -- a more complicated proof
 twotwofour :: Iso' (Two + Two) Four
-twotwofour = lemma1 . lemma2 where
-             lemma1 :: Iso' (Two + Two) (I + Three)
-             lemma1 = rev plus_assoc
-             lemma2 :: Iso' (I + Three) Four -- a definition actually
-             lemma2 = id
+twotwofour = rev plus_assoc
+
 
 -- a specialized version of firsting and seconding for clarity
 lefting :: (a ~~ b) -> (a + c) ~~ (b + c)
@@ -114,6 +122,9 @@ lefting = firsting
 
 righting :: (a ~~ b) -> (c + a) ~~ (c + b)
 righting = seconding
+
+ldist ::   ((b + c) * a) ~~ (b * a + c * a)
+ldist = comm_mul . dist . (lefting comm_mul) . (righting comm_mul)
 
 
 -- very painful. Using holes _ and error messages absolutely essential
@@ -124,14 +135,10 @@ factorexample = dist .  -- distribute out the right side
                 plus_assoc . -- reassociate plus to the left
                (lefting (lefting (righting comm_mul))) . -- turn a * I term to I * a
                 (lefting (rev plus_assoc)) . -- associate the two a*I terms together into an (a * I + a * I) term 
-                 (lefting (righting (rev lemma))) . -- factor together that subterm into Two * a
-                  (righting id_mul) where -- convert last I * I term into I
-    lemma ::   ((b + c) * a) ~~ (b * a + c * a)
-    lemma = comm_mul . dist . (lefting comm_mul) . (righting comm_mul)
+                 (lefting (righting (rev ldist))) . -- factor together that subterm into Two * a
+                  (righting id_mul) -- convert last I * I term into I
 
 
-ldist ::   ((b + c) * a) ~~ (b * a + c * a)
-ldist = comm_mul . dist . (lefting comm_mul) . (righting comm_mul)
 
 -- (lefting dist) . _
 -- a newtype to mark variable position
@@ -144,6 +151,26 @@ newtype V a = V a
 newtype VL l a = VL a
 
 
+
+class RAbsorb a b | a -> b where
+    rabsorb :: a ~~ b
+instance RAbsorb (x + O) x where
+    rabsorb = id_plus
+instance RAbsorb (x * I) x where
+    rabsorb = id_mul
+instance RAbsorb (x * O) O where
+    rabsorb = mul_zero
+
+labsorb :: (Swapped p, RAbsorb (p b a) (p b' a')) => (p a b) ~~ (p a' b')
+labsorb = swapped . rabsorb . swapped   
+
+
+{-
+-- The same pattern, left, right and then iterate?
+
+Can I make this pattern higher order?
+
+-}
 
 
 
@@ -179,41 +206,302 @@ instance Expand (V a) (V a) where
     expand = id
 
 
+class RDist a b | a -> b where
+    rdist :: Iso' a b
+instance (RDist (a * b) ab, RDist (a * c) ac) => RDist (a * (b + c)) (ab + ac) where
+    rdist = dist . (bimapping rdist rdist)
+instance RDist a a' => RDist (a * I) (a' * I) where
+    rdist = firsting rdist
+instance RDist a a' => RDist (a * O) (a' * O) where
+    rdist = firsting rdist
+instance RDist a a' => RDist (a * (V b)) (a' * (V b)) where
+    rdist = firsting rdist
+instance (RDist a a', RDist b b') => RDist (a + b) (a' + b') where
+    rdist = bimapping rdist rdist
+instance RDist O O where
+    rdist = id
+instance RDist I I where
+    rdist = id
+instance RDist (V a) (V a) where
+    rdist = id
+
+-- can derive ldist from swapped . rdist . swapped?
+
+class LDist a b | a -> b where
+    ldist' :: Iso' a b
+instance (LDist (b * a) ab, LDist (c * a) ac) => LDist ((b + c) * a) (ab + ac) where
+    ldist' = ldist . (bimapping ldist' ldist')
+instance LDist a a' => LDist (I * a) (I * a') where
+    ldist' = seconding ldist'
+instance LDist a a' => LDist (O * a) (O * a') where
+    ldist' = seconding ldist'
+instance LDist a a' => LDist ((V b) * a) ((V b) * a') where
+    ldist' = seconding ldist'
+
+instance (LDist a a', LDist b b') => LDist (a + b) (a' + b') where
+    ldist' = bimapping ldist' ldist'
+
+instance LDist O O where
+    ldist' = id
+instance LDist I I where
+    ldist' = id
+instance LDist (V a) (V a) where
+    ldist' = id
+
+type family HasPlus a where
+    HasPlus (a + b) = 'True
+    HasPlus (a * b) = (HasPlus a) || (HasPlus b)
+    HasPlus I = 'False
+    HasPlus O = 'False
+    HasPlus (V _) = 'False
+
+class Dist f a b | f a -> b where
+    dis :: a ~~ b
+instance (f ~ HasPlus ab', LDist (a * b) ab, 
+          RDist ab ab', Dist f ab' ab'') => Dist 'True (a * b) ab'' where
+    dis = ldist' . rdist . (dis @f)
+instance Dist 'False (a * b) (a * b) where
+    dis = id
+instance (HasPlus a ~ fa, HasPlus b ~ fb, 
+          Dist fa a a', Dist fb b b') => Dist x (a + b) (a' + b') where
+    dis = bimapping (dis @fa) (dis @fb)
+    -- is that enough though? only dist if 
+instance Dist x I I where
+    dis = id
+instance Dist x O O where
+    dis = id
+instance Dist x (V a) (V a) where
+    dis = id
+
+
+dist' :: forall a a' f. (f ~ HasPlus a, Dist f a a') => Iso' a a'
+dist' = dis @f
+{-
+-- does this do it all or does it only do one iteration?
+dist' :: (LDist a b, RDist b c) => a ~~ c
+dist' = ldist' . rdist
+-}
+
+{-
+
+
+-}
+
+-- 2 middle operators * 4 * 4 = 16 options. No there are way more
+-- I'm not even convinced this makes sense to do.
+{-
+class Dist a b | a -> b where
+    dist :: Iso' a b
+
+instance Dist (I * I) (I * I) where
+    dist = id
+instance Dist (O * O) (O * O) where
+    dist = id
+instance Dist (I * O) (I * O) where
+    dist = id
+instance Dist (O * I) (O * I) where
+    dist = id
+
+instance Dist (I + I) (I + I) where
+    dist = id
+instance Dist (O + O) (O + O) where
+    dist = id
+instance Dist (I + O) (I + O) where
+    dist = id
+instance Dist (O + I) (O + I) where
+    dist = id
+
+-- this one is also problematic. How do I know that ab doesn't have a plus?
+instance Dist (a * b) ab => Dist (I * (a * b)) (I * (ab)) where
+    dist = seconding dist
+instance Dist (I * a) ia, Dist (I * b) ib => Dist (I * (a + b)) (ia + ib) where
+    dist = seconding dist
+instance Dist (a * b) ab => Dist (I + (a * b)) (I + (ab)) where
+instance Dist (a + b) ab => Dist (I + (a + b)) (I + (ab)) where
+
+-- and the flip
+instance Dist (a * O) ao, Dist (b * O) bo => Dist ((a + b) * O) ((ab) * O) where
+    dist = firsting dist
+instance Dist (a * b) ab => Dist ((a * b) * I) ((ab) * I) where
+    dist = firsting dist
+-- and replace I with O
+
+
+
+-- this one, it isn't clear that isn't clear. Maybe we should associate it until it hits
+instance (Dist (a * b) ab, Dist (c * d) cd) => Dist ((a * b) * (c * d)) (ab * cd) where -- this one is a problem.
+    dist = bimapping dist dist
+
+instance (Dist (a * (c * d)) acd, Dist (b * (c * d)) bcd) => Dist ((a + b) * (c * d)) (acd + bcd) where
+    dist = dist . (bimapping dist'' dist'')
+instance (Dist (a * (c * d)) acd, Dist (b * (c * d)) bcd) => Dist ((a * b) * (c + d)) (abc + abd) where
+    dist = dist . (bimapping dist'' dist'')
+instance (Dist (a * c) ac, Dist (b * c) bc, Dist (a * d) ad, Dist (b * d) bd) => Dist ((a + b) * (c + d)) (ac + ad + bc + bd) where
+    dist = ldist . dist . (bimapping dist'' dist'')
+
+
+instance (Dist (a + b) ab, Dist (c + d) cd) => Dist ((a + b) + (c + d)) ((a' + b') + (c' + d')) where
+    dist = bimapping dist dist
+instance (Dist (a + b) ab, Dist (c + d) cd) => Dist ((a * b) + (c + d)) (ab + (c' + d')) where
+    dist = bimapping dist dist
+instance (Dist (a + b) ab, Dist (c + d) cd) => Dist ((a + b) + (c * d)) ((a' + b') + cd) where
+    dist = bimapping dist dist
+instance (Dist (a * b) ab, Dist (c * d) cd) => Dist ((a * b) + (c * d)) (ab + cd) where
+    dist = (bimapping dist'' dist'')
+-}
+
+
+
 -- http://www.philipzucker.com/a-touch-of-topological-quantum-computation-in-haskell-pt-ii-automating-drudgery/
 -- gosh I guess I'm really smart
-{-
+-- or a total red herring. Or I messed that up?
+
+-- casing on the right argument
+-- missing the mixed case of + *.
+
+class LeftAssoc a b | a -> b where
+    leftAssoc :: Iso' a b
+instance (LeftAssoc ((a + b) + c) abc') => LeftAssoc (a + (b + c)) abc' where
+    leftAssoc = plus_assoc . leftAssoc 
+instance LeftAssoc a a' => LeftAssoc (a + I) (a' + I) where
+    leftAssoc = firsting leftAssoc 
+instance LeftAssoc a a' => LeftAssoc (a + O) (a' + O) where
+    leftAssoc = firsting leftAssoc 
+
+instance (LeftAssoc ((a * b) * c) abc') => LeftAssoc (a * (b * c)) abc' where
+    leftAssoc = mul_assoc . leftAssoc 
+instance LeftAssoc a a' => LeftAssoc (a * I) (a' * I) where
+    leftAssoc = firsting leftAssoc 
+instance LeftAssoc a a' => LeftAssoc (a * O) (a' * O) where
+    leftAssoc = firsting leftAssoc 
+
+instance (LeftAssoc (b * c) bc, LeftAssoc a a') => LeftAssoc (a + (b * c)) (a' + bc) where
+    leftAssoc = bimapping leftAssoc leftAssoc
+-- a * (b + c) ->  a * b + a * c 
+-- This case won't happen if we've already distribute out.
+instance (LeftAssoc (b + c) bc, LeftAssoc a a') => LeftAssoc (a * (b + c)) (a' * bc) where
+    leftAssoc = bimapping leftAssoc leftAssoc
+
+instance LeftAssoc O O where
+    leftAssoc = id
+instance LeftAssoc I I where
+    leftAssoc = id
+instance LeftAssoc (V a) (V a) where
+    leftAssoc = id
+
+
+
+
+
 class RightAssoc a b | a -> b where
     rightAssoc :: Iso' a b
-instance (RightAssoc ((a + b) + c) abc') => RightAssoc (a + (b + c)) abc' where
-    expand = (firsting (expand @a)) . (seconding ((lefting (expand @b)) . (righting (expand @c)))) . dist 
-instance RightAssoc (a + b) ab' => RightAssoc ((a + b) + c)
+instance (RightAssoc (a + (b + c)) abc') => RightAssoc ((a + b) + c) abc' where
+    rightAssoc = (rev plus_assoc) . rightAssoc 
+instance RightAssoc a a' => RightAssoc (I + a) (I + a') where
+    rightAssoc = seconding rightAssoc 
+instance RightAssoc a a' => RightAssoc (O + a) (O + a') where
+    rightAssoc = seconding rightAssoc 
+
+instance (RightAssoc (b * c) bc, RightAssoc a a') => RightAssoc ((b * c) + a) (bc + a') where
+    rightAssoc = bimapping rightAssoc rightAssoc
+instance (RightAssoc (b + c) bc, RightAssoc a a') => RightAssoc ((b + c) * a) (bc * a') where
+    rightAssoc = bimapping rightAssoc rightAssoc
+
 instance RightAssoc O O where
     rightAssoc = id
 instance RightAssoc I I where
     rightAssoc = id
 instance RightAssoc (V a) (V a) where
     rightAssoc = id
+
+-- 16 terms
+-- This seems stupid
+{-
+type family SortedTerm a where
+    SortedTerm (O * (I * a)) = SortedTerm (I * a)
+    SortedTerm (I * (O * a)) = 'False
+    SortedTerm (O * (O * a)) = SortedTerm (O * a)
+    SortedTerm (I * (I * a)) = SortedTerm (I * a)
+    SortedTerm (I * ((V b) * a)) = SortedTerm ((V b) * a)
+    SortedTerm (O * ((V b) * a)) = SortedTerm ((V b) * a)
+    SortedTerm ((V b) * (I * a)) = 'False
+    SortedTerm ((V b) * (O * a)) = 'False
+    SortedTerm ((V b) * ((V b) * a)) = SortedTerm ((V b) * a)
+    SortedTerm O = 'True
+    SortedTerm I = 'True
+    SortedTerm (V a) = 'True
 -}
+type family SortedTerm a :: Bool where
+    SortedTerm (a + (b + c)) = (((CmpTerm a b) == 'EQ) || ((CmpTerm a b) == 'GT)) && (SortedTerm (b + c))
+    SortedTerm (a + b) = ((CmpTerm a b) == 'EQ) || ((CmpTerm a b) == 'GT)
+    SortedTerm a = 'True
 
-class PullLeft a b | a -> b where
-   pullLeft :: a ~~ b
-instance PullLeft O O where
-    pullLeft = id
-instance PullLeft I I where
-    pullLeft = id
-instance PullLeft (V a) (V a) where
-    pullLeft = id
-instance PullLeft (f O b) (f O b) where -- abstract over both + and *
-    pullLeft = id
-instance PullLeft (f I b) (f I b) where
-    pullLeft = id
-instance PullLeft (f (V a) b) (f (V a) b) where
-    pullLeft = id
-instance (PullLeft a a')  => PullLeft ((a + b) + c) (a' + (b + c)) where
-    pullLeft = (rev plus_assoc) . (lefting pullLeft)
-instance (PullLeft a a')  => PullLeft ((a * b) * c) (a' * (b * c)) where
-    pullLeft = (rev mul_assoc) . (firsting pullLeft)
+type family CmpTerm a b where
+    CmpTerm ((V a) * b) ((V a) * c) = CmpTerm b c
+    CmpTerm ((V a) * b) (V a) = 'GT
+    CmpTerm (V a) ((V a) * b)  = 'LT
+    CmpTerm (V a) (V a) = 'EQ
+    CmpTerm I (V a) = 'LT
+    CmpTerm (V a) I = 'GT
+    CmpTerm I I = 'EQ
 
+
+-- Maybe this is all uneccessary since we'll expand out and abosrb to a*a + a*a + a + a + a + a
+
+
+-- type a == b = TEq.(==) a b
+
+type family (a :: k) == (b :: k) :: Bool where
+    f a == g b = f == g && a == b
+    a == a = 'True
+    _ == _ = 'False
+
+class Bubble f a b | f a -> b where
+    bubble :: a ~~ b
+    -- this isn't right. we need to break open c.
+instance (f ~ CmpTerm b c, Bubble f (b + c) bc) => Bubble 'EQ (a + (b + c)) (a + bc) where
+    bubble = righting (bubble @f)
+instance (f ~ CmpTerm b c, Bubble f (b + c) bc) => Bubble 'GT (a + (b + c)) (a + bc) where
+    bubble = righting (bubble @f)
+instance (f ~ CmpTerm a c, Bubble f (a + c) ac) => Bubble 'LT (a + (b + c)) (b + ac) where
+    bubble = plus_assoc . (lefting comm_plus) . (rev plus_assoc) . righting (bubble @f)
+-- The times shows that we're at the end of our + list.
+instance Bubble 'EQ (a + (b * c)) (a + (b * c)) where
+    bubble = id
+instance Bubble 'GT (a + (b * c)) (a + (b * c)) where
+    bubble = id
+instance Bubble 'LT (a + (b * c)) ((b * c) + a) where
+    bubble = comm_plus
+
+{-
+
+
+class SortTerm a b | a -> b where
+    sortterm :: a ~~ b
+-- bubble sort?
+
+{- -- maube not
+instance Bubble (a * b) (a * b) where
+    bubble = id
+instance Bubble 'Eq (V a) (V a) where
+    bubble = id
+instance Bubble 'Eq I I where
+    bubble = id
+-}
+class SortTerm 'True a a
+   sort = id
+class (f ~ SortedTerm a'), Bubble a a', SortTerm f a' b) => SortTerm 'False a b where
+    sort = bubble . sort
+
+instance SortTerm (I * O) (O * I)
+instance SortTerm (O * O) (O * O)
+instance SortTerm (O * I) (O * I)
+
+
+
+
+-} 
+-- class Merge 
 -- peano operations?
 {-
 class Canon a b | a -> b where
@@ -316,15 +604,17 @@ instance (EvalPeano x z) => EvalPeano (O + x) z where
     evalpeano = comm_plus . id_plus . evalpeano
 
 -- Try to organize variables in the back
-instance (EvalPeano x x') => EvalPeano ((V a) + x) (x' + (V a)) where
-    evalpeano = comm_plus . (lefting evalpeano)
+instance (EvalPeano x x') => EvalPeano ((V a) + x) ((V a) + x') where
+    evalpeano = righting evalpeano -- comm_plus . (lefting evalpeano)
 
 --instance (EvalPeano x x', EvalPeano y y',  EvalPeano (x' + (I + y')) z) => EvalPeano ((I + x) + y) z where -- true additions
 --    evalpeano = (righting (evalpeano @y)) . (lefting comm_plus) . (rev plus_assoc) . (lefting (evalpeano @x)) . evalpeano
 instance (EvalPeano x x',  EvalPeano (x' + (y + z)) r) => EvalPeano ((x + y) + z) r where -- true additions
     evalpeano = (rev plus_assoc) . (lefting (evalpeano @x)) . evalpeano
 
-
+instance (EvalPeano (x * y) xy, EvalPeano z z' ) => EvalPeano ((x * y) + z) (xy + z') where -- true additions
+    evalpeano = bimapping evalpeano evalpeano
+-- EvalPeano (xy + z)) r
 
 instance EvalPeano (O * x) O where
     evalpeano = comm_mul . mul_zero
@@ -335,9 +625,32 @@ instance (EvalPeano x x', EvalPeano (x' * (y * z)) r) => EvalPeano ((x * y) * z)
 instance (EvalPeano (x * z) xz, EvalPeano (y * z) yz, EvalPeano (xz + yz) r) => EvalPeano ((x + y) * z) r where
     evalpeano = ldist . (lefting evalpeano) . (righting evalpeano) . evalpeano
 
-instance (EvalPeano x x') => EvalPeano ((V a) * x) (x' * (V a)) where
-    evalpeano = comm_mul . (firsting evalpeano)
+instance (EvalPeano x x') => EvalPeano ((V a) * x) ((V a) * x') where
+    evalpeano = seconding evalpeano -- comm_mul . (firsting evalpeano)
 
+{-
+class AbsorbRightZero a b | a -> b where
+    absorbrightzero :: a ~~ b
+instance AbsorbRightZero a b => AbsorbRightZero (a + O) b
+    absorbrightzero = id_plus . absorbrightzero
+instance AbsorbRightZero a b => AbsorbRightZero (a + I) (b + I)
+    absorbrightzero = firsting absorbrightzero
+instance (AbsorbRightZero a a', AbsorbRightZero b b')  => AbsorbRightZero (a * b) (a' * b')
+    absorbrightzero = (firsting absorbrightzero) . (seconding absorbrightzero)
+-}
+
+class DeepSwap a b | a -> b where
+    deepswap :: a ~~ b
+instance (DeepSwap a a', DeepSwap b b') => DeepSwap (a*b) (b' * a') where
+    deepswap = comm_mul . (bimapping deepswap deepswap)
+instance (DeepSwap a a', DeepSwap b b') => DeepSwap (a + b) (b' + a') where
+    deepswap = comm_plus . (bimapping deepswap deepswap)
+instance DeepSwap I I where
+    deepswap = id
+instance DeepSwap O O where
+    deepswap = id
+instance DeepSwap (V a) (V a) where
+    deepswap = id
 
 thm4 :: (Two + Two) ~~ Four
 thm4 = evalpeano -- . (rev (peano . evalpeano))
@@ -351,15 +664,26 @@ thm6 = evalpeano . (rev evalpeano)
 thm7 :: (Two * Three) ~~ (Two + Two * Two)
 thm7 = evalpeano . (rev evalpeano)
 
+--thm8 :: ((I + O) + (I + O)) ~~ Two
+--thm8 = rewrite
+
+thm9 :: (I + O) ~~ I
+thm9 = evalpeano . righteval
+
+righteval :: (DeepSwap a b, EvalPeano b c) => a ~~ c
+righteval = deepswap . evalpeano
 
 -- intended to be used in the type directed form `rewrite @intermediate_type`
-rewrite :: forall b a c. (EvalPeano a c, EvalPeano b c) => a ~~ b
-rewrite = evalpeano . (rev evalpeano)
+--rewrite :: forall b a c. (EvalPeano a c, EvalPeano b c) => a ~~ b
+-- rewrite = (evalpeano . deepswap) . (rev (evalpeano . deepswap))
 
--- factorexample' :: (V a' ~ a) => (I * (a + I)) ~~ _ -- * (a + I)) ~~  _ -- (a * a + Two * a + I)
--- factorexample' = evalpeano -- . (rev evalpeano)
+test1 :: (V a' ~ a) => (I * (a + I)) ~~ (a + I)-- _ -- * (a + I)) ~~  _ -- (a * a + Two * a + I)
+test1 = evalpeano . righteval  . (rev (evalpeano . righteval))
 
-
+factorexample' :: (V a' ~ a) => ((a + I) * (a + I)) ~~ (a * a + Two * a + I)
+factorexample' = evalpeano . righteval . (rev lemma) where -- (rev (evalpeano . righteval)) . _
+                    lemma :: (V a' ~ a) => (a * a + Two * a + I) ~~ (I + (a + (a + (a * a))))
+                    lemma = evalpeano . righteval
 {-
 
 
@@ -409,6 +733,8 @@ onelesstwo = _Left
 factorexample'' ::  (a * a + Two * a + I) .| (a + I)
 factorexample'' = (rev factorexample) . _1 
 
+
+
 -- maybe we want to newtype these.
 -- partially applied +
 type P n = (Either n) 
@@ -420,6 +746,7 @@ type LowerP f = f O
 unP :: LowerP (P n) ~~ n
 unP = id_plus
 
+{-
 type LowerM f = f I
 -- you can lower back to the original form
 unM :: LowerM (M n) ~~ n
@@ -439,7 +766,7 @@ newtype GTE a b = GTE (a >= b)
 -- this is accepted
 -- This is the proof term that f is the negative of g
 type N g f = forall a b. ((GTE (g a) b) ~~ (GTE a (f b)))
-
+-}
 -- ordinarily we think of negative numbers as being (n + (-n) == 0), but this makes no sense.
 -- The inequality version does (maybe). f will have to be a type family, not type.
 -- yeah, myabe this is bunkus. could make it polymorphic on only on a? And pick b such that 
@@ -452,3 +779,39 @@ type N g f = forall a b. ((GTE (g a) b) ~~ (GTE a (f b)))
 
 -- similarly for multiplication
 -- using divisibility rather than GTE
+
+
+
+--HEREIN LIES THE TRASH PILE
+
+ {-
+instance RightAssoc a a' => RightAssoc (a + (b * c)) (a' + O) -- maybe
+
+-- no -- instance RightAssoc (a + b) ab' => RightAssoc ((a + b) + c)
+instance RightAssoc O O where
+    rightAssoc = id
+instance RightAssoc I I where
+    rightAssoc = id
+instance RightAssoc (V a) (V a) where
+    rightAssoc = id
+-}
+{-
+class PullLeft a b | a -> b where
+    pullLeft :: a ~~ b
+ instance PullLeft O O where
+     pullLeft = id
+ instance PullLeft I I where
+     pullLeft = id
+ instance PullLeft (V a) (V a) where
+     pullLeft = id
+ instance PullLeft (f O b) (f O b) where -- abstract over both + and *
+     pullLeft = id
+ instance PullLeft (f I b) (f I b) where
+     pullLeft = id
+ instance PullLeft (f (V a) b) (f (V a) b) where
+     pullLeft = id
+ instance (PullLeft a a')  => PullLeft ((a + b) + c) (a' + (b + c)) where
+     pullLeft = (rev plus_assoc) . (lefting pullLeft)
+ instance (PullLeft a a')  => PullLeft ((a * b) * c) (a' * (b * c)) where
+     pullLeft = (rev mul_assoc) . (firsting pullLeft)
+ -}
