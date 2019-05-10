@@ -28,6 +28,25 @@ http://hackage.haskell.org/package/vector-algorithms-0.8.0.1
 
 Database system,s in general is highly related. We could probably directly intepret to SQL queries. (point free sql?)
 
+
+If profunctor is relations, Do the free converse?
+data Converse p a b = { p b' a', b' -> b, a -> a' }
+Converse (Converse p) <-> p
+
+profunctor inequality
+(p a b) ~~ (q a b, r a b)
+this is lens
+
+
+Compose makes sense.
+Rift from profunctors does appear to be related to the right division of relations.
+data Meet p a b = (p a b, p a b) -- just guesses. The Meet is also bviously a profunctor.
+data Join p a b = Either (p a b) (p a b) 
+WrapBi b p = b (p a b) (p a b)
+WrapBi b p q = b (p a b) (q a b) is a profunctor
+
+Ends and coends. Are about diagonal-ish relations.  Diagonal over types though. Still, the identity relationship, projectors
+
 -}
 --compose :: Relation b c -> Relation a b -> Relation a c
 -- compose 
@@ -233,5 +252,29 @@ Make data structure to do relational operations much lazier.
 use LogicT somehow
 
 data Rel = Fin [(a,b)] | Top -- represent full relation exlicitly. Bottom is already implicit as []
+
+-}
+
+
+{-
+
+Finally tagless language integrated query - kiselyov
+to my mind he was building the Free Initial value kind of piecemeal?
+That's cool for composability, but it seems like this becomes a runtime intepretation? Which sort of kills some of the point of finally tagless
+maybe I'm wrong
+
+Annotating things with
+
+Comp :: 
+Other ::
+
+Converse ::
+Other :: 
+
+
+Can we overload list comprehension syntax to build a dsl data structre? 
+
+[(a,c) |  <- r,  ] somehow outputs Comp r s
+
 
 -}
