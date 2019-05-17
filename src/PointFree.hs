@@ -1,14 +1,19 @@
-{-# LANGUAGE GADTs, NoImplicitPrelude, TypeOperators #-}
+{-# LANGUAGE GADTs, NoImplicitPrelude, TypeOperators, DataKinds, FunctionalDependencies, MultiParamTypeClasses, AllowAmbiguousTypes, TypeApplications, 
+PolyKinds, FlexibleInstances, RankNTypes, ScopedTypeVariables #-}
 
 module PointFree where
 import Control.Arrow
 import Control.Category
 import Prelude hiding (id, (.))
-
+import Data.Proxy
 
 type a :+: b = Either a b
 type a :*: b = (a,b)
-
+type f <<< g = 'Comp g f
+type f >>> g = 'Comp f g
+type f *** g = 'Par f g
+type f &&& g = 'Fan f g
+type 
 data PF a b where
     Id :: PF a a
     Comp :: PF b c -> PF a b -> PF a c
@@ -22,6 +27,22 @@ data PF a b where
     Rgt :: PF b (a :+: b)
 
 type NatF a = () :+: a
+
+
+type T1 = 'Comp 'Fst 'Snd
+
+
+
+class Reflect a b | a -> b where
+    reflect :: b
+-- I guess reflect is exactly the same as the interpeter. However, as type class based dispatch, we can be pretty sure there is no overhead.
+instance Reflect ('Fst :: PF (a,b) a) ((a,b) -> a) where -- it is bizarre that I can reflect kinds like this. TypeInType?
+    reflect = fst
+instance Reflect ('Snd :: PF (a,b) b) ((a,b) -> b) where
+    reflect = snd
+
+preflect :: forall a b. Reflect a b => Proxy a -> b
+preflect _ = reflect @a
 
 succ :: PF a (NatF a)
 succ = Rgt
@@ -115,6 +136,39 @@ forall x. Lens ((x,x)+2x+1) (x+1) -- demontrates that x+1 is a factor of x^2 + 2
 base lens combinators need to be considered axioms, or could do in agda and carry lens laws along with lens
 
 a -> b == b^a. But this is just shorthand for finite types a. You're going into transcendetal equations if you let a be variable, not polynomials
+
+
+
+-- point free "singletons"
+
+newtype SFun l a b = SFun (a -> b)
+newtype SFun (l :: a -> b) = SFun (a -> b)
+-- our axiom set
+SFun 
+
+data SFun' a b where -- GADTs for lifting. But not quite the regular singleton story since we'll be 
+    Comp ::
+
+
+data Converse? Should we allow converse? Maybe build a type class that can't strip converse wrappers
+
+data Comp a b
+compose :: SFun l' b c -> SFun l a b -> SFun (Comp l' l) a c
+compose (SFun f) (SFun g) = SFun (f . g)
+
+
+fan :: SFun l -> SFun l' -> (Fan l l')
+dup
+split
+par
+|||
+
+
+We need the totally unapplied symbols.
+We need to write point-free programs at the type level.
+SndSym0
+FstSym0
+
 
 
 -}

@@ -47,6 +47,13 @@ WrapBi b p q = b (p a b) (q a b) is a profunctor
 
 Ends and coends. Are about diagonal-ish relations.  Diagonal over types though. Still, the identity relationship, projectors
 
+
+How to deal with non algebraic data types?
+Int, float
+Abstract domains?
+guard ?
+
+
 -}
 --compose :: Relation b c -> Relation a b -> Relation a c
 -- compose 
