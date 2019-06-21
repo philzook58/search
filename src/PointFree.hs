@@ -7,13 +7,45 @@ import Control.Category
 import Prelude hiding (id, (.))
 import Data.Proxy
 
+-- maybe I should be defining these via singletons promotion
 type a :+: b = Either a b
 type a :*: b = (a,b)
 type f <<< g = 'Comp g f
 type f >>> g = 'Comp f g
-type f *** g = 'Par f g
+type f *** g = Par f g
 type f &&& g = 'Fan f g
-type 
+type f ||| g = 'Split f g
+-- type f +++ g = 
+
+-- Do it this way or in this style
+-- Singletons won't autogenerate thse because I want the actual function held.
+-- Its will generate other stuff though. 
+
+{- These are the singletonized versions of regular |||
+(%|||) :: TFun f -> TFun g -> TFun (Split f g)
+(TFun f) %||| (TFun g) = TFun 
+
+I dunno
+type l ::: a b = TFun l (a -> b)
+
+lft :: TFun 'Lft a (a :+: b)
+lft = TFun Left
+rgt
+dump = TFun (const ())
+absurd :: 
+absurd = TFun absurd
+
+instance ProFunctor TFun l where -- nvm. no this blows a hole wide open into it
+    bimap f g (TFun h) = 
+
+data LawProof where
+    Law1 :: (a ||| b)  (yada yada)
+
+
+
+
+-}
+
 data PF a b where
     Id :: PF a a
     Comp :: PF b c -> PF a b -> PF a c
@@ -25,6 +57,8 @@ data PF a b where
     Split :: PF a b -> PF c b -> PF (a :+: c) b
     Lft :: PF a (a :+: b)
     Rgt :: PF b (a :+: b)
+    
+type Par f g = Fan (Comp f Fst) (Comp g Fst) 
 
 type NatF a = () :+: a
 
@@ -40,6 +74,7 @@ instance Reflect ('Fst :: PF (a,b) a) ((a,b) -> a) where -- it is bizarre that I
     reflect = fst
 instance Reflect ('Snd :: PF (a,b) b) ((a,b) -> b) where
     reflect = snd
+-- alternate style is to use newtype wrapped functions phantom tagged with their contents
 
 preflect :: forall a b. Reflect a b => Proxy a -> b
 preflect _ = reflect @a

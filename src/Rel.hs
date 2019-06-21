@@ -6,6 +6,7 @@ import Control.Arrow (second)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Maybe (mapMaybe)
+import Data.List (nub)
 -- http://hackage.haskell.org/package/relation-0.2.1/docs/Data-Relation.html
 {-
 data Relation a b  = Relation { domain ::  M.Map a (S.Set b)
@@ -53,6 +54,8 @@ Int, float
 Abstract domains?
 guard ?
 
+
+Rel (a,b,c) (d,e) = Map a (Map b (Map c (Map d))) -- completely curry. trans untrans cheap. Swap isn't awful. Compose filters a bit. Converse very expensive
 
 -}
 --compose :: Relation b c -> Relation a b -> Relation a c
@@ -110,7 +113,25 @@ join = M.unionWith S.union
 
 meet :: (Ord a, Ord b) => Rel' a b -> Rel' a b -> Rel' a b
 meet = M.intersectionWith S.intersection
+{-
+rdiv :: Rel 
+rdiv x y = [  (c,a) | (c,a) <- top, all [   | (a',b) <- y, a == a', (c',b') <- x, b == b', c == c']   ]
+datajoin x y = = [ (a,b,c) | (a,b) <- x, (b', c) <- y, b == b'] 
+[ (a,c) , [b]  ]
 
+forall f xs = all (map f x) 
+-}
+-- rdiv x y is maximal relation such that (rdiv x y) . y <= x
+rdiv :: (Eq a, Eq b, Eq c) => Rel a c -> Rel b c -> Rel a b
+rdiv x y = [ (a,b)  | a <- leftSet x, b <- leftSet y, all (\c -> (a,c) `elem` x && (b,c) `elem` y) (rightSet y)] -- getting the recued candidates from y and x might help.
+
+
+
+rsub :: (Eq a, Eq b) => Rel a b -> Rel a b -> Bool
+rsub x y = all (flip elem y) x
+
+-- let bs = (map snd y) in let x' = [(c,b) | (c,b) <- xs, b `elem` bs] in let (a,c) `elem` [  ]  
+-- collect :: [(a,b)] -> [(a , [b])]
 -- we also need to converse the divisor.
 -- similarity of compose and divison. One uses intersectionsm, the other unions.
 -- I need to think this one over with a cleaer head. Not sure i did it right
@@ -222,11 +243,11 @@ dup x = (x,x)
 liftSet :: [a] -> Rel a a
 liftSet = map dup
 
-leftSet :: Rel a b -> [a]
-leftSet = map fst
+leftSet :: Eq a => Rel a b -> [a]
+leftSet = nub . (map fst)
 
-rightSet :: Rel a b -> [b]
-rightSet = map snd -- leftSet . converse
+rightSet :: Eq b => Rel a b -> [b]
+rightSet = nub . (map snd) -- leftSet . converse
 
 -- predicates
 {-
